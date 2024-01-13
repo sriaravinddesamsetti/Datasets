@@ -1,53 +1,68 @@
 import streamlit as st
-from PIL import Image
 import tensorflow as tf
-configuration={'batchsize':32,'img_size':256,
-               'learningrate':0.001,
-               'n_epoches':12,
-               "num_classes":12,
-               'droupoutrate':0.0,
-               'regularization_rate':0.0 ,
-               'num_filters':6,
-               "kernelsize":3,
-               "n_strides":1,
-               'poolsize':2,
-               'N_DENSE_1':100,
-               'N_DENSE_2':10,
-}
-# Load the model for testing
-loaded_model = tf.keras.models.load_model('pests_detection_model.h5')
+from PIL import Image, ImageOps
+import numpy as np
+from keras.models import load_model
+from keras.preprocessing.image import img_to_array
 
-# Define the class names (replace with your actual class names)
-class_names = ["ants", 'bees', 'beetle', 'caterpillar', 'earthworms', 'earwig', 'grasshopper', 'moth', 'slug', 'snail',
-               'wasp', 'weevil']
+# Load the glaucoma detection model
+glaucoma_model = tf.keras.models.load_model('my_model2.h5')
 
-# Function to preprocess the image and make predictions
-def predict_with_model(image):
-    # Load and preprocess the image
-    processed_image = image.resize((configuration["img_size"], configuration["img_size"]))
-    processed_image = tf.keras.preprocessing.image.img_to_array(processed_image)
-    processed_image = tf.expand_dims(processed_image, axis=0)
+# Load the diabetic retinopathy detection model
+retinopathy_model = load_model('model.hd5')
+image_size = (64, 64)
 
-    # Make predictions
-    predictions = loaded_model(processed_image)
+def preprocess_image(image, target_size):
+    # Convert the image to the required size and format
+    img = image.resize(target_size)
+    img_array = img_to_array(img)
+    img_array = np.expand_dims(img_array, axis=0) / 255.0
+    return img_array
 
-    # Get the predicted class
-    predicted_class = class_names[tf.argmax(predictions, axis=-1).numpy()[0]]
+def glaucoma_detection(image):
+    image = ImageOps.fit(image, (100, 100), Image.ANTIALIAS)
+    image = image.convert('RGB')
+    image = np.asarray(image)
+    image = (image.astype(np.float32) / 255.0)
+    img_reshape = image[np.newaxis, ...]
+    prediction = glaucoma_model.predict(img_reshape)
+    return prediction[0][0]
 
-    return predicted_class.upper()
+def retinopathy_detection(image):
+    processed_image = preprocess_image(image, image_size)
+    prediction = retinopathy_model.predict(processed_image)
+    return prediction[0][0]
 
 def main():
-    st.title("Pests Detection App")
-    
-    uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
+    st.title("Disease Detection App")
 
-    if uploaded_file is not None:
-        image = Image.open(uploaded_file)
-        st.image(image, caption="Uploaded Image.", use_column_width=True)
+    st.header("Upload an eye image for disease detection.")
+    file = st.file_uploader("Please upload an image (jpg) file", type=["jpg"])
 
-        if st.button("Predict"):
-            result = predict_with_model(image)
-            st.success(f"Predicted Class: {result}")
+    if file is not None:
+        image = Image.open(file)
+        st.image(image, caption="Uploaded Image", width=300)
+
+        # Buttons for disease detection
+        if st.button("Glaucoma Detection"):
+            # Glaucoma detection
+            prediction = glaucoma_detection(image)
+            if prediction > 0.5:
+                st.subheader("Prediction Result:")
+                st.success("Healthy eyes detected!")
+            else:
+                st.subheader("Prediction Result:")
+                st.warning("Glaucoma detected! Please consult an ophthalmologist.")
+
+        if st.button("Diabetic Retinopathy Detection"):
+            # Diabetic Retinopathy detection
+            processed_image = preprocess_image(image, image_size)
+            prediction = retinopathy_model.predict(processed_image)
+            st.subheader("Prediction Result:")
+            if prediction > 0.4:
+                st.success("Diabetic Retinopathy Detected!")
+            else:
+                st.success("No Diabetic Retinopathy Detected!")
 
 if __name__ == "__main__":
     main()
